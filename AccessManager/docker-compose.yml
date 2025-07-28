@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # Backend API service
+  server:
+    build:
+      context: ./server
+    container_name: starlink-server
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${PORT:-5000}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-starlink_manager}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres_password}
+      - ACCESS_TOKEN_SECRET=${ACCESS_TOKEN_SECRET:-your_jwt_secret_key_change_in_production}
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    networks:
+      - starlink-network
+
+  # Frontend service
+  client:
+    build:
+      context: ./client
+    container_name: starlink-client
+    restart: unless-stopped
+    environment:
+      - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:5000/api}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    depends_on:
+      - server
+    networks:
+      - starlink-network
+
+  # Captive portal service
+  captive-portal:
+    build:
+      context: ./captive-portal
+    container_name: starlink-captive-portal
+    restart: unless-stopped
+    environment:
+      - CAPTIVE_PORT=${CAPTIVE_PORT:-3333}
+      - API_URL=${REACT_APP_API_URL:-http://server:5000/api}
+    ports:
+      - "3333:3333"
+    volumes:
+      - ./captive-portal:/app
+      - /app/node_modules
+    depends_on:
+      - server
+    networks:
+      - starlink-network
+
+  # Database service
+  postgres:
+    image: postgres:15-alpine
+    container_name: starlink-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${DB_NAME:-starlink_manager}
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./server/models/db.sql:/docker-entrypoint-initdb.d/db.sql
+    networks:
+      - starlink-network
+
+volumes:
+  postgres-data:
+
+networks:
+  starlink-network:
+    driver: bridge
